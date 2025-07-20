@@ -10,12 +10,19 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=@quiz-battle/api",
+    "dev:web": "turbo dev --filter=@quiz-battle/web",
     "lint": "turbo lint",
     "test": "turbo test",
+    "test:watch": "turbo test -- --watch",
+    "test:coverage": "turbo test -- --coverage",
     "type-check": "turbo type-check",
     "clean": "turbo clean",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:test": "node -e \"console.log('DATABASE_URL:', process.env.DATABASE_URL ? '✓ Set' : '✗ Missing')\"",
+    "setup": "npm install && echo 'Next: Configure packages/database/.env with your Supabase credentials'",
+    "verify": "node scripts/verify-setup.js"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
