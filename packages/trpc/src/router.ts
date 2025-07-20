@@ -1,15 +1,15 @@
 import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
-import { 
-  getActiveThemes, 
-  getThemeById, 
+import {
+  getActiveThemes,
+  getThemeById,
   getRandomQuestionsByTheme,
   createGame,
   getGameById,
   updateGame,
   findWaitingGameByTheme,
   createAnswer,
-  getAnswersByGame 
+  getAnswersByGame
 } from '@quiz-battle/database';
 import { ThemeSchema, GameSchema, generateGameId } from '@quiz-battle/shared';
 
@@ -24,7 +24,7 @@ export const appRouter = router({
     getAll: procedure.query(async () => {
       return await getActiveThemes();
     }),
-    
+
     getById: procedure
       .input(z.object({ id: z.string() }))
       .query(async ({ input }) => {
@@ -81,7 +81,7 @@ export const appRouter = router({
   // Question routes
   questions: router({
     getByTheme: procedure
-      .input(z.object({ 
+      .input(z.object({
         themeId: z.string(),
         limit: z.number().optional().default(5),
       }))
@@ -102,7 +102,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         return await createAnswer({
-          id: `answer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: crypto.randomUUID(),
           gameId: input.gameId,
           playerId: input.playerId,
           questionId: input.questionId,

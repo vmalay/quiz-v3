@@ -7,10 +7,13 @@ import { createExpressMiddleware } from '@trpc/server/adapters/express';
 import { appRouter } from '@quiz-battle/trpc';
 import { setupSocketHandlers } from './socket/handlers';
 
+// Load environment variables from database package
 dotenv.config();
 
 const app = express();
 const server = createServer(app);
+
+console.log(process.env.CLIENT_URL);
 
 // CORS configuration
 app.use(cors({

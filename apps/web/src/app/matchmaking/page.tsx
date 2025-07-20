@@ -11,22 +11,22 @@ function MatchmakingContent() {
   const searchParams = useSearchParams();
   const themeId = searchParams.get('themeId');
   const themeName = searchParams.get('themeName');
-  
-  const { 
-    playerId, 
-    isInMatchmaking, 
-    isWaitingForOpponent, 
+
+  const {
+    playerId,
+    isInMatchmaking,
+    isWaitingForOpponent,
     currentGame,
     setMatchmaking,
-    setWaitingForOpponent 
+    setWaitingForOpponent
   } = useGameStore();
-  
+
   const { joinMatchmaking } = useSocket();
   const [secondsWaiting, setSecondsWaiting] = useState(0);
 
   // Get theme details
   const { data: theme } = trpc.themes.getById.useQuery(
-    { id: themeId || '' }, 
+    { id: themeId || '' },
     { enabled: !!themeId }
   );
 
@@ -112,18 +112,18 @@ function MatchmakingContent() {
                 <div className="absolute top-0 left-0 w-16 h-16 border-4 border-blue-600 rounded-full animate-spin border-t-transparent"></div>
               </div>
             </div>
-            
+
             <h3 className="text-lg font-semibold text-blue-800 mb-2">
               {isWaitingForOpponent ? 'Waiting for Opponent' : 'Searching for Players'}
             </h3>
-            
+
             <p className="text-blue-700 mb-4">
-              {isWaitingForOpponent 
+              {isWaitingForOpponent
                 ? 'Found a game! Waiting for another player to join...'
                 : 'Looking for an opponent with the same theme preference...'
               }
             </p>
-            
+
             <div className="text-2xl font-mono font-bold text-blue-800">
               {formatTime(secondsWaiting)}
             </div>

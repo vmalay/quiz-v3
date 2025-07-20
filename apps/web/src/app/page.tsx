@@ -14,7 +14,7 @@ export default function HomePage() {
       alert('Player ID not generated yet. Please refresh the page.');
       return;
     }
-    
+
     // Navigate to matchmaking page with theme info
     router.push(`/matchmaking?themeId=${themeId}&themeName=${encodeURIComponent(themeName)}`);
   };
@@ -59,13 +59,13 @@ export default function HomePage() {
         <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
           Choose Your Theme
         </h2>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {themes?.map((theme) => (
             <div key={theme.id} className="bg-white rounded-lg border shadow-sm hover:shadow-lg transition-shadow p-6">
               <h3 className="text-lg font-semibold mb-2">{theme.name}</h3>
               <p className="text-gray-600 mb-4">{theme.description || 'Test your knowledge!'}</p>
-              <button 
+              <button
                 className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => handleThemeSelect(theme.id, theme.name)}
                 disabled={!playerId}
@@ -87,11 +87,11 @@ export default function HomePage() {
             </div>
           </div>
         )}
-        
+
         {playerId && (
           <div className="text-center mt-8">
             <p className="text-sm text-gray-500">
-              Player ID: <code className="bg-gray-100 px-2 py-1 rounded">{playerId.slice(0, 8)}...</code>
+              Player ID: <code className="bg-gray-100 px-2 py-1 rounded">{playerId}</code>
             </p>
           </div>
         )}

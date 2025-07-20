@@ -1,17 +1,17 @@
-import { 
-  Game, 
-  Question, 
-  GameStatus, 
-  GAME_CONFIG, 
+import {
+  Game,
+  Question,
+  GameStatus,
+  GAME_CONFIG,
   calculatePoints,
   isValidAnswerIndex,
-  ServerToClientEvents 
+  ServerToClientEvents
 } from '@quiz-battle/shared';
-import { 
-  getGameById, 
-  updateGame, 
-  getRandomQuestionsByTheme, 
-  createAnswer 
+import {
+  getGameById,
+  updateGame,
+  getRandomQuestionsByTheme,
+  createAnswer
 } from '@quiz-battle/database';
 
 export interface GameSession {
@@ -60,8 +60,8 @@ export class GameManager {
 
       // Create game session
       const session: GameSession = {
-        game: { 
-          ...game, 
+        game: {
+          ...game,
           status: GameStatus.ACTIVE,
           themeId: game.themeId!,
           player2Id: game.player2Id || undefined,
@@ -116,7 +116,7 @@ export class GameManager {
     session.countdownInterval = setInterval(() => {
       const elapsed = Date.now() - session.currentQuestionStartTime;
       const remaining = Math.max(0, (GAME_CONFIG.QUESTION_TIME_LIMIT_SECONDS * 1000) - elapsed);
-      
+
       this.socketEmitter(gameId, 'countdown-tick', {
         timeRemaining: remaining,
         serverTime: Date.now(),
@@ -138,8 +138,8 @@ export class GameManager {
   }
 
   async submitAnswer(
-    gameId: string, 
-    playerId: string, 
+    gameId: string,
+    playerId: string,
     selectedAnswer: number
   ): Promise<boolean> {
     const session = this.sessions.get(gameId);
@@ -160,7 +160,7 @@ export class GameManager {
 
     // Save to database
     await createAnswer({
-      id: `answer_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: crypto.randomUUID(),
       gameId,
       playerId,
       questionId: currentQuestion.id,

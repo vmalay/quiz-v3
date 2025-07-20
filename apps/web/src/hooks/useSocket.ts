@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import {useCallback, useEffect, useRef} from 'react';
 import { socketManager, TypedSocket } from '@/lib/socket';
 import { useGameStore } from '@/stores/game-store';
 
@@ -74,7 +74,7 @@ export function useSocket() {
     });
 
     return () => {
-      socketManager.disconnect();
+      // socketManager.disconnect();
     };
   }, [
     setCurrentGame,
@@ -87,13 +87,13 @@ export function useSocket() {
     playerId,
   ]);
 
-  const joinMatchmaking = (themeId: string) => {
+  const joinMatchmaking = useCallback((themeId: string) => {
     if (socketRef.current && playerId) {
       socketRef.current.emit('player-join-matchmaking', { themeId, playerId });
     }
-  };
+  }, []);
 
-  const submitAnswer = (gameId: string, selectedAnswer: number, responseTime: number) => {
+  const submitAnswer = useCallback((gameId: string, selectedAnswer: number, responseTime: number) => {
     if (socketRef.current && playerId) {
       socketRef.current.emit('player-submit-answer', {
         gameId,
@@ -102,13 +102,13 @@ export function useSocket() {
         responseTime,
       });
     }
-  };
+  }, []);
 
-  const requestGameState = (gameId: string) => {
+  const requestGameState = useCallback((gameId: string) => {
     if (socketRef.current && playerId) {
       socketRef.current.emit('request-game-state', { gameId, playerId });
     }
-  };
+  }, []);
 
   return {
     socket: socketRef.current,
