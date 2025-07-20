@@ -11,7 +11,10 @@ import {
   getGameById,
   updateGame,
   getRandomQuestionsByTheme,
-  createAnswer
+  createAnswer,
+  deleteGameAndAnswers,
+  cleanupCompletedGames,
+  cleanupOldGames
 } from '@quiz-battle/database';
 
 export interface GameSession {
@@ -269,6 +272,9 @@ export class GameManager {
 
     // Clean up session
     this.sessions.delete(gameId);
+
+    // Schedule database cleanup after a delay to allow clients to process results
+    await deleteGameAndAnswers(gameId);
   }
 
   getSession(gameId: string): GameSession | undefined {
