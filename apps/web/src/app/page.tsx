@@ -1,13 +1,13 @@
 'use client';
 
-import { trpc } from '@/lib/trpc';
+import { useRouter } from 'next/navigation';
+import { trpc } from '@/components/providers';
 import { useGameStore } from '@/stores/game-store';
-import { useSocket } from '@/hooks/useSocket';
 
 export default function HomePage() {
+  const router = useRouter();
   const { data: themes, isLoading, error } = trpc.themes.getAll.useQuery();
-  const { joinMatchmaking } = useSocket();
-  const { setMatchmaking, playerId } = useGameStore();
+  const { playerId } = useGameStore();
 
   const handleThemeSelect = (themeId: string, themeName: string) => {
     if (!playerId) {
@@ -15,10 +15,8 @@ export default function HomePage() {
       return;
     }
     
-    setMatchmaking(true);
-    joinMatchmaking(themeId);
-    // For now, just show an alert. We'll implement proper navigation in Phase 2
-    alert(`Starting ${themeName} battle! Player ID: ${playerId.slice(0, 8)}...`);
+    // Navigate to matchmaking page with theme info
+    router.push(`/matchmaking?themeId=${themeId}&themeName=${encodeURIComponent(themeName)}`);
   };
 
   if (isLoading) {
