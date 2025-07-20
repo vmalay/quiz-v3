@@ -55,6 +55,11 @@ export function useSocket() {
       setOpponentAnswered(true);
     });
 
+    socket.on('answer-result', (data) => {
+      // Handle answer feedback (can be used for UI feedback)
+      console.log('Answer result:', data);
+    });
+
     socket.on('question-timeout', (data) => {
       updateScores(data.scores.player1, data.scores.player2);
     });

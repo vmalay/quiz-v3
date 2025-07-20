@@ -19,6 +19,7 @@ export interface GameSession {
   questions: Question[];
   currentQuestionStartTime: number;
   questionTimer?: NodeJS.Timeout;
+  countdownInterval?: NodeJS.Timeout;
   playersAnswered: Set<string>;
   answers: Map<string, { answer: number; responseTime: number }>;
 }
@@ -111,6 +112,25 @@ export class GameManager {
       serverTime: session.currentQuestionStartTime,
     });
 
+    // Start countdown ticks (every 100ms for smooth updates)
+    session.countdownInterval = setInterval(() => {
+      const elapsed = Date.now() - session.currentQuestionStartTime;
+      const remaining = Math.max(0, (GAME_CONFIG.QUESTION_TIME_LIMIT_SECONDS * 1000) - elapsed);
+      
+      this.socketEmitter(gameId, 'countdown-tick', {
+        timeRemaining: remaining,
+        serverTime: Date.now(),
+      });
+
+      // Stop countdown when time runs out
+      if (remaining <= 0) {
+        if (session.countdownInterval) {
+          clearInterval(session.countdownInterval);
+          session.countdownInterval = undefined;
+        }
+      }
+    }, 100); // Update every 100ms
+
     // Set question timer
     session.questionTimer = setTimeout(() => {
       this.endQuestion(gameId);
@@ -157,14 +177,13 @@ export class GameManager {
       session.game.player2Score += points;
     }
 
-    // Emit answer result to player
-    this.socketEmitter(gameId, 'answer-result', {
-      isCorrect,
-      points,
-      correctAnswer: currentQuestion.correctAnswer,
+    // Update game in database
+    await updateGame(gameId, {
+      player1Score: session.game.player1Score,
+      player2Score: session.game.player2Score,
     });
 
-    // Emit opponent answered notification
+    // Emit opponent answered notification to the room
     this.socketEmitter(gameId, 'opponent-answered', {
       playerId,
       hasAnswered: true,
@@ -183,10 +202,14 @@ export class GameManager {
     const session = this.sessions.get(gameId);
     if (!session) return;
 
-    // Clear timer
+    // Clear timers
     if (session.questionTimer) {
       clearTimeout(session.questionTimer);
       session.questionTimer = undefined;
+    }
+    if (session.countdownInterval) {
+      clearInterval(session.countdownInterval);
+      session.countdownInterval = undefined;
     }
 
     const currentQuestion = session.questions[session.game.currentQuestionIndex];

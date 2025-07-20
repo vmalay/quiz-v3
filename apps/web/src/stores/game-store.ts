@@ -82,8 +82,16 @@ export const useGameStore = create<GameState>()(
     
     setOpponentAnswered: (answered: boolean) => set({ opponentHasAnswered: answered }),
     
-    updateScores: (player: number, opponent: number) => 
-      set({ playerScore: player, opponentScore: opponent }),
+    updateScores: (player1Score: number, player2Score: number) => {
+      const { playerId, currentGame } = get();
+      if (currentGame?.player1Id === playerId) {
+        // Current player is player1
+        set({ playerScore: player1Score, opponentScore: player2Score });
+      } else {
+        // Current player is player2
+        set({ playerScore: player2Score, opponentScore: player1Score });
+      }
+    },
     
     setGameCompleted: (completed: boolean, winner: string | null) => 
       set({ gameCompleted: completed, winner }),
