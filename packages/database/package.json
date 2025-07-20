@@ -22,8 +22,8 @@
   },
   "dependencies": {
     "@quiz-battle/shared": "file:../shared",
-    "drizzle-orm": "^0.29.0",
-    "postgres": "^3.4.3"
+    "drizzle-orm": "^0.29.5",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -13,7 +13,7 @@ export const trpc = createTRPCNext<AppRouter>({
     return {
       links: [
         httpBatchLink({
-          url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/trpc`,
+          url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/trpc`,
         }),
       ],
     };

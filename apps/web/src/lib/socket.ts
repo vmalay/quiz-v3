@@ -8,7 +8,7 @@ class SocketManager {
   private url: string;
 
   constructor() {
-    this.url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+    this.url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
   }
 
   connect(): TypedSocket {
