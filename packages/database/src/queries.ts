@@ -78,63 +78,8 @@ export async function getPlayerAnswersForGame(gameId: string, playerId: string) 
 export async function deleteGameAndAnswers(gameId: string) {
   // Delete all answers for the game first (due to foreign key constraints)
   await db.delete(answers).where(eq(answers.gameId, gameId));
-  
+
   // Then delete the game
   const result = await db.delete(games).where(eq(games.id, gameId)).returning();
   return result[0] || null;
-}
-
-export async function deleteAnswersForGame(gameId: string) {
-  const result = await db.delete(answers).where(eq(answers.gameId, gameId)).returning();
-  return result;
-}
-
-export async function cleanupCompletedGames(olderThanMinutes: number = 60) {
-  const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000);
-  
-  // Get completed games older than cutoff time
-  const completedGames = await db
-    .select({ id: games.id })
-    .from(games)
-    .where(and(
-      eq(games.status, 'completed'),
-      and(
-        isNotNull(games.completedAt),
-        lt(games.completedAt, cutoffTime)
-      )
-    ));
-  
-  let deletedCount = 0;
-  for (const game of completedGames) {
-    try {
-      await deleteGameAndAnswers(game.id);
-      deletedCount++;
-    } catch (error) {
-      console.error(`Failed to cleanup game ${game.id}:`, error);
-    }
-  }
-  
-  return deletedCount;
-}
-
-export async function cleanupOldGames(olderThanHours: number = 24) {
-  const cutoffTime = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
-  
-  // Get all games (regardless of status) older than cutoff time
-  const oldGames = await db
-    .select({ id: games.id })
-    .from(games)
-    .where(lt(games.createdAt, cutoffTime));
-  
-  let deletedCount = 0;
-  for (const game of oldGames) {
-    try {
-      await deleteGameAndAnswers(game.id);
-      deletedCount++;
-    } catch (error) {
-      console.error(`Failed to cleanup old game ${game.id}:`, error);
-    }
-  }
-  
-  return deletedCount;
 }

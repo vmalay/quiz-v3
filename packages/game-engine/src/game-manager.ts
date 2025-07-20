@@ -13,8 +13,6 @@ import {
   getRandomQuestionsByTheme,
   createAnswer,
   deleteGameAndAnswers,
-  cleanupCompletedGames,
-  cleanupOldGames
 } from '@quiz-battle/database';
 
 export interface GameSession {
