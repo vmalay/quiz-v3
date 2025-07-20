@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { trpc } from '@/lib/trpc';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
   description: 'Compete in real-time multiplayer quiz battles',
 };
 
-export default function RootLayout({
+function RootLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -24,3 +25,5 @@ export default function RootLayout({
     </html>
   );
 }
+
+export default trpc.withTRPC(RootLayout);
