@@ -1,3 +1,4 @@
 export * from './schema';
 export * from './connection';
 export * from './queries';
+export * from './repositories';

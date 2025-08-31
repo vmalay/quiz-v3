@@ -19,16 +19,28 @@ export const questions = pgTable('questions', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const GameStatus = {
+    WAITING: 'waiting',
+    ACTIVE: 'active',
+    COMPLETED: 'completed',
+    CANCELLED: 'cancelled',
+}
+
+export type GameStatusType = typeof GameStatus[keyof typeof GameStatus];
+
 export const games = pgTable('games', {
   id: uuid('id').defaultRandom().primaryKey(),
-  player1Id: text('player1_id').notNull(),
-  player2Id: text('player2_id'),
+  player1Id: uuid('player1_id').notNull(),
+  player2Id: uuid('player2_id'),
   themeId: uuid('theme_id').references(() => themes.id),
-  status: text('status').default('waiting').notNull(),
-  winnerId: text('winner_id'),
+  status: text('status').default('waiting').$type<GameStatusType>().notNull(),
+  winnerId: uuid('winner_id'),
   player1Score: integer('player1_score').default(0).notNull(),
   player2Score: integer('player2_score').default(0).notNull(),
   currentQuestionIndex: integer('current_question_index').default(0).notNull(),
+  questionDeadline: timestamp('question_deadline'),
+  questionTimeLimit: integer('question_time_limit').default(10),
+  totalQuestions: integer('total_questions').default(5),
   createdAt: timestamp('created_at').defaultNow().notNull(),
   completedAt: timestamp('completed_at'),
 });
@@ -36,7 +48,7 @@ export const games = pgTable('games', {
 export const answers = pgTable('answers', {
   id: uuid('id').defaultRandom().primaryKey(),
   gameId: uuid('game_id').references(() => games.id, { onDelete: 'cascade' }).notNull(),
-  playerId: text('player_id').notNull(),
+  playerId: uuid('player_id').notNull(), // Changed from text
   questionId: uuid('question_id').references(() => questions.id).notNull(),
   selectedAnswer: integer('selected_answer'),
   isCorrect: boolean('is_correct'),

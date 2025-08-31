@@ -1,17 +1,23 @@
 import { Server, Socket } from 'socket.io';
-import { 
-  ClientToServerEvents, 
+import {
+  ClientToServerEvents,
   ServerToClientEvents,
   generateGameId,
-  GameStatus
+  GameStatus,
+  GameRepository,
+  QuestionRepository,
+  AnswerRepository
 } from '@quiz-battle/shared';
-import { 
-  findWaitingGameByTheme, 
-  createGame, 
-  updateGame,
-  getGameById
-} from '@quiz-battle/database';
 import { GameManager } from '@quiz-battle/game-engine';
+import {
+  createSocketSecurityMiddleware,
+  createEventRateLimitMiddleware,
+  gameActionLimiter,
+  generalEventLimiter,
+  validateSocketInput,
+  sanitizeSocketInput,
+  connectionMonitor
+} from '../middleware/socket-security';
 
 type TypedSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>;
@@ -19,64 +25,102 @@ type TypedServer = Server<ClientToServerEvents, ServerToClientEvents>;
 const gameRooms = new Map<string, Set<string>>(); // gameId -> Set of socket IDs
 const playerSockets = new Map<string, string>(); // playerId -> socket ID
 
-export function setupSocketHandlers(io: TypedServer): void {
-  // Create game manager with socket emitter
-  const gameManager = new GameManager((gameId: string, event: keyof ServerToClientEvents, data: any) => {
-    io.to(gameId).emit(event as any, data);
-  });
+export function setupSocketHandlers(
+  io: TypedServer,
+  gameRepository: GameRepository,
+  questionRepository: QuestionRepository,
+  answerRepository: AnswerRepository
+): void {
+  // Apply socket security middleware
+  io.use(createSocketSecurityMiddleware());
+
+  // Create game manager with socket emitter and repositories
+  const gameManager = new GameManager(
+    (gameId: string, event: keyof ServerToClientEvents, data: any) => {
+      io.to(gameId).emit(event as any, data);
+    },
+    gameRepository,
+    questionRepository,
+    answerRepository
+  );
 
   io.on('connection', (socket: TypedSocket) => {
     console.log(`🔌 Player connected: ${socket.id}`);
+    
+    // Add connection to monitor
+    connectionMonitor.addConnection(socket);
+    function joinRoom(gameId: string) {
+        socket.join(gameId);
+        if (!gameRooms.has(gameId)) gameRooms.set(gameId, new Set());
+        gameRooms.get(gameId)!.add(socket.id);
+    }
 
     socket.on('player-join-matchmaking', async (data) => {
+      // Rate limiting check
+      if (!generalEventLimiter.isAllowed(socket.id, 'player-join-matchmaking')) {
+        socket.emit('rate-limit-exceeded', {
+          eventType: 'player-join-matchmaking',
+          message: 'Too many matchmaking requests'
+        });
+        return;
+      }
+
+      // Update activity monitor
+      connectionMonitor.updateActivity(socket.id);
+
+      // Input validation and sanitization
+      if (!validateSocketInput(data)) {
+        socket.emit('error', {
+          message: 'Invalid input detected',
+          code: 'INVALID_INPUT'
+        });
+        return;
+      }
+
       try {
-        const { themeId, playerId } = data;
-        
+        const sanitizedData = sanitizeSocketInput(data);
+        const { themeId, playerId } = sanitizedData;
+
+        // Additional validation
+        if (!themeId || !playerId || typeof themeId !== 'string' || typeof playerId !== 'string') {
+          socket.emit('error', {
+            message: 'Missing or invalid required fields',
+            code: 'VALIDATION_ERROR'
+          });
+          return;
+        }
+
         // Store player socket mapping
         playerSockets.set(playerId, socket.id);
 
         // Look for existing waiting game
-        const waitingGame = await findWaitingGameByTheme(themeId);
+        const waitingGame = await gameRepository.findWaitingGameByTheme(themeId);
 
         if (waitingGame && waitingGame.player1Id !== playerId) {
           // Join existing game
           const gameId = waitingGame.id;
-          
+
           // Update game with second player
-          await updateGame(gameId, {
+          await gameRepository.updateGame(gameId, {
             player2Id: playerId,
             status: GameStatus.ACTIVE,
           });
 
           // Join socket room
-          socket.join(gameId);
-          if (!gameRooms.has(gameId)) {
-            gameRooms.set(gameId, new Set());
-          }
-          gameRooms.get(gameId)!.add(socket.id);
+          joinRoom(gameId);
 
           // Get updated game
-          const updatedGame = await getGameById(gameId);
-          if (updatedGame) {
-            // Cast to proper types
-            const gameData = {
-              ...updatedGame,
-              status: updatedGame.status as GameStatus,
-              themeId: updatedGame.themeId!,
-              player2Id: updatedGame.player2Id || undefined,
-              winnerId: updatedGame.winnerId || undefined,
-              completedAt: updatedGame.completedAt || undefined,
-            };
-
+          const game = await gameRepository.getGameById(gameId);
+          if (game) {
             // Notify current player they joined
-            socket.emit('player-join-game', { 
-              gameId, 
-              game: gameData 
+            socket.emit('player-join-game', {
+              gameId,
+              game,
             });
 
             // Notify opponent that player joined
-            socket.to(gameId).emit('opponent-join-game', { 
-              game: gameData,
+            socket.to(gameId).emit('opponent-join-game', {
+              game,
               opponent: { id: playerId, sessionId: socket.id, isReady: true, isConnected: true }
             });
 
@@ -84,84 +128,144 @@ export function setupSocketHandlers(io: TypedServer): void {
             setTimeout(async () => {
               const success = await gameManager.startGame(gameId);
               if (!success) {
-                io.to(gameId).emit('error', { 
-                  message: 'Failed to start game', 
-                  code: 'GAME_START_ERROR' 
+                io.to(gameId).emit('error', {
+                  message: 'Failed to start game',
+                  code: 'GAME_START_ERROR'
                 });
               }
             }, 1000); // 1 second delay before starting
           }
-        } else {
+        }
+        else {
           // Create new game
           const gameId = generateGameId();
-          const newGame = await createGame({
-            id: gameId,
-            player1Id: playerId,
-            themeId,
-          });
+          await gameRepository.createGame({ id: gameId, player1Id: playerId, themeId });
 
           // Join socket room
-          socket.join(gameId);
-          if (!gameRooms.has(gameId)) {
-            gameRooms.set(gameId, new Set());
-          }
-          gameRooms.get(gameId)!.add(socket.id);
-
-          // Cast to proper types
-          const gameData = {
-            ...newGame,
-            status: newGame.status as GameStatus,
-            themeId: newGame.themeId!,
-            player2Id: newGame.player2Id || undefined,
-            winnerId: newGame.winnerId || undefined,
-            completedAt: newGame.completedAt || undefined,
-          };
-
-          // Notify player they created the game
-          socket.emit('player-create-game', { 
-            gameId, 
-            game: gameData 
-          });
+          joinRoom(gameId);
         }
       } catch (error) {
         console.error('Error in player-join-matchmaking:', error);
-        socket.emit('error', { 
-          message: 'Failed to join matchmaking', 
-          code: 'MATCHMAKING_ERROR' 
+        socket.emit('error', {
+          message: 'Failed to join matchmaking',
+          code: 'MATCHMAKING_ERROR'
         });
       }
     });
 
     socket.on('player-submit-answer', async (data) => {
+      // Game action rate limiting (stricter)
+      if (!gameActionLimiter.isAllowed(socket.id, 'player-submit-answer')) {
+        socket.emit('rate-limit-exceeded', {
+          eventType: 'player-submit-answer',
+          message: 'Too many answer submissions'
+        });
+        return;
+      }
+
+      // Update activity monitor
+      connectionMonitor.updateActivity(socket.id);
+
+      // Input validation and sanitization
+      if (!validateSocketInput(data)) {
+        socket.emit('error', {
+          message: 'Invalid input detected',
+          code: 'INVALID_INPUT'
+        });
+        return;
+      }
+
       try {
-        const { gameId, playerId, selectedAnswer, responseTime } = data;
-        
+        const sanitizedData = sanitizeSocketInput(data);
+        const { gameId, playerId, selectedAnswer, responseTime } = sanitizedData;
+
+        // Additional validation
+        if (!gameId || !playerId || selectedAnswer === undefined || !responseTime || 
+            typeof gameId !== 'string' || typeof playerId !== 'string' ||
+            typeof selectedAnswer !== 'number' || typeof responseTime !== 'number') {
+          socket.emit('error', {
+            message: 'Missing or invalid required fields',
+            code: 'VALIDATION_ERROR'
+          });
+          return;
+        }
+
+        // Validate answer index range
+        if (selectedAnswer < 0 || selectedAnswer > 3) {
+          socket.emit('error', {
+            message: 'Invalid answer index',
+            code: 'VALIDATION_ERROR'
+          });
+          return;
+        }
+
+        // Validate response time (prevent negative or impossibly fast times)
+        if (responseTime < 100 || responseTime > 15000) {
+          socket.emit('error', {
+            message: 'Invalid response time',
+            code: 'VALIDATION_ERROR'
+          });
+          return;
+        }
+
         const success = await gameManager.submitAnswer(gameId, playerId, selectedAnswer);
-        
+
         if (!success) {
-          socket.emit('error', { 
-            message: 'Failed to submit answer', 
-            code: 'ANSWER_SUBMIT_ERROR' 
+          socket.emit('error', {
+            message: 'Failed to submit answer',
+            code: 'ANSWER_SUBMIT_ERROR'
           });
         }
       } catch (error) {
         console.error('Error in player-submit-answer:', error);
-        socket.emit('error', { 
-          message: 'Failed to submit answer', 
-          code: 'ANSWER_SUBMIT_ERROR' 
+        socket.emit('error', {
+          message: 'Failed to submit answer',
+          code: 'ANSWER_SUBMIT_ERROR'
         });
       }
     });
 
     socket.on('request-game-state', async (data) => {
+      // Rate limiting check
+      if (!generalEventLimiter.isAllowed(socket.id, 'request-game-state')) {
+        socket.emit('rate-limit-exceeded', {
+          eventType: 'request-game-state',
+          message: 'Too many state sync requests'
+        });
+        return;
+      }
+
+      // Update activity monitor
+      connectionMonitor.updateActivity(socket.id);
+
+      // Input validation and sanitization
+      if (!validateSocketInput(data)) {
+        socket.emit('error', {
+          message: 'Invalid input detected',
+          code: 'INVALID_INPUT'
+        });
+        return;
+      }
+
       try {
-        const { gameId, playerId } = data;
+        const sanitizedData = sanitizeSocketInput(data);
+        const { gameId, playerId } = sanitizedData;
+
+        // Additional validation
+        if (!gameId || !playerId || typeof gameId !== 'string' || typeof playerId !== 'string') {
+          socket.emit('error', {
+            message: 'Missing or invalid required fields',
+            code: 'VALIDATION_ERROR'
+          });
+          return;
+        }
+
         await gameManager.syncGameState(gameId, playerId);
       } catch (error) {
         console.error('Error in request-game-state:', error);
-        socket.emit('error', { 
-          message: 'Failed to sync game state', 
-          code: 'SYNC_ERROR' 
+        socket.emit('error', {
+          message: 'Failed to sync game state',
+          code: 'SYNC_ERROR'
         });
       }
     });
@@ -169,6 +273,9 @@ export function setupSocketHandlers(io: TypedServer): void {
     socket.on('disconnect', () => {
       console.log(`🔌 Player disconnected: ${socket.id}`);
       
+      // Clean up connection monitor
+      connectionMonitor.removeConnection(socket.id);
+
       // Clean up player socket mapping
       for (const [playerId, socketId] of playerSockets.entries()) {
         if (socketId === socket.id) {
@@ -181,15 +288,15 @@ export function setupSocketHandlers(io: TypedServer): void {
       for (const [gameId, socketIds] of gameRooms.entries()) {
         if (socketIds.has(socket.id)) {
           socketIds.delete(socket.id);
-          
+
           // If room is empty, clean it up
           if (socketIds.size === 0) {
             gameRooms.delete(gameId);
           } else {
             // Notify remaining players about disconnection
-            socket.to(gameId).emit('error', { 
-              message: 'Opponent disconnected', 
-              code: 'PLAYER_DISCONNECTED' 
+            socket.to(gameId).emit('error', {
+              message: 'Opponent disconnected',
+              code: 'PLAYER_DISCONNECTED'
             });
           }
           break;

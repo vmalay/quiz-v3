@@ -9,8 +9,8 @@ import { trpc } from '@/components/providers';
 function MatchmakingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const themeId = searchParams.get('themeId');
-  const themeName = searchParams.get('themeName');
+  const themeId = searchParams.get('themeId') ?? '';
+  const themeName = searchParams.get('themeName') ?? '';
 
   const {
     playerId,
@@ -31,11 +31,6 @@ function MatchmakingContent() {
   );
 
   useEffect(() => {
-    if (!themeId || !playerId) {
-      router.push('/');
-      return;
-    }
-
     // Start matchmaking when component mounts
     setMatchmaking(true);
     joinMatchmaking(themeId);

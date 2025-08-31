@@ -1,6 +1,7 @@
 import { eq, and, desc, lt, isNotNull } from 'drizzle-orm';
 import { db } from './connection';
 import { themes, questions, games, answers } from './schema';
+import {Game} from "@quiz-battle/shared";
 
 // Theme queries
 export async function getActiveThemes() {
@@ -37,9 +38,9 @@ export async function createGame(data: {
   return result[0];
 }
 
-export async function getGameById(id: string) {
+export async function getGameById(id: string): Promise<Game> {
   const result = await db.select().from(games).where(eq(games.id, id));
-  return result[0] || null;
+  return result[0] as unknown as Promise<Game>;
 }
 
 export async function updateGame(id: string, data: Partial<typeof games.$inferInsert>) {

@@ -87,7 +87,15 @@ export interface ServerToClientEvents {
   'game-completed': (data: { game: Game; finalScores: { player1: number; player2: number }; winner: string | null }) => void;
   'countdown-tick': (data: { timeRemaining: number; serverTime: number }) => void;
   'answer-result': (data: { isCorrect: boolean; points: number; correctAnswer: number }) => void;
+  'player-disconnected': (data: { playerId: string; gameId: string }) => void;
+  'player-reconnected': (data: { playerId: string; gameId: string }) => void;
+  'game-cancelled': (data: { gameId: string; reason: string }) => void;
+  'matchmaking-failed': (data: { reason: string; themeId: string }) => void;
+  'next-question': (data: { question: Question; questionIndex: number; timeLimit: number; serverTime: number }) => void;
+  'both-players-answered': (data: { results: { playerId: string; isCorrect: boolean; responseTime: number }[]; correctAnswer: number }) => void;
+  'waiting-for-opponent': (data: { message: string }) => void;
   'game-state-sync': (data: { game: Game; currentQuestion?: Question; timeRemaining?: number }) => void;
+  'rate-limit-exceeded': (data: { eventType: string; message: string; resetTime?: number }) => void;
   'error': (data: { message: string; code?: string }) => void;
 }
 
@@ -110,3 +118,32 @@ export const GAME_CONFIG = {
   QUESTION_TIME_LIMIT_SECONDS: 10,
   MATCHMAKING_TIMEOUT_SECONDS: 30,
 } as const;
+
+// Legacy types - maintained for backward compatibility
+// Use domain layer types for new development
+
+// Repository Interfaces (moved to separate file for better organization)
+export interface GameRepository {
+  createGame(data: { id: string; player1Id: string; themeId: string }): Promise<Game>;
+  getGameById(id: string): Promise<Game | null>;
+  updateGame(id: string, data: Partial<Game>): Promise<Game | null>;
+  findWaitingGameByTheme(themeId: string): Promise<Game | null>;
+  deleteGame(id: string): Promise<void>;
+}
+
+export interface QuestionRepository {
+  getRandomQuestionsByTheme(themeId: string, limit: number): Promise<Question[]>;
+  getQuestionById(id: string): Promise<Question | null>;
+}
+
+export interface AnswerRepository {
+  createAnswer(data: Answer): Promise<Answer>;
+  getAnswersByGame(gameId: string): Promise<Answer[]>;
+  getPlayerAnswersForGame(gameId: string, playerId: string): Promise<Answer[]>;
+  deleteAnswersByGame(gameId: string): Promise<void>;
+}
+
+export interface ThemeRepository {
+  getActiveThemes(): Promise<Theme[]>;
+  getThemeById(id: string): Promise<Theme | null>;
+}

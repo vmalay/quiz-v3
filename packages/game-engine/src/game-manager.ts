@@ -5,15 +5,12 @@ import {
   GAME_CONFIG,
   calculatePoints,
   isValidAnswerIndex,
-  ServerToClientEvents
+  ServerToClientEvents,
+  GameRepository,
+  QuestionRepository,
+  AnswerRepository,
+  Answer
 } from '@quiz-battle/shared';
-import {
-  getGameById,
-  updateGame,
-  getRandomQuestionsByTheme,
-  createAnswer,
-  deleteGameAndAnswers,
-} from '@quiz-battle/database';
 
 export interface GameSession {
   game: Game;
@@ -28,46 +25,43 @@ export interface GameSession {
 export class GameManager {
   private sessions = new Map<string, GameSession>();
   private socketEmitter: (gameId: string, event: keyof ServerToClientEvents, data: any) => void;
+  private gameRepository: GameRepository;
+  private questionRepository: QuestionRepository;
+  private answerRepository: AnswerRepository;
 
-  constructor(socketEmitter: (gameId: string, event: keyof ServerToClientEvents, data: any) => void) {
+  constructor(
+    socketEmitter: (gameId: string, event: keyof ServerToClientEvents, data: any) => void,
+    gameRepository: GameRepository,
+    questionRepository: QuestionRepository,
+    answerRepository: AnswerRepository
+  ) {
     this.socketEmitter = socketEmitter;
+    this.gameRepository = gameRepository;
+    this.questionRepository = questionRepository;
+    this.answerRepository = answerRepository;
   }
 
   async startGame(gameId: string): Promise<boolean> {
     try {
-      const game = await getGameById(gameId);
+      const game = await this.gameRepository.getGameById(gameId);
       if (!game || !game.themeId || !game.player2Id) {
         return false;
       }
 
       // Get questions for the game
-      const questionsFromDb = await getRandomQuestionsByTheme(game.themeId!, GAME_CONFIG.QUESTIONS_PER_GAME);
-      if (questionsFromDb.length < GAME_CONFIG.QUESTIONS_PER_GAME) {
+      const questions = await this.questionRepository.getRandomQuestionsByTheme(game.themeId, GAME_CONFIG.QUESTIONS_PER_GAME);
+      if (questions.length < GAME_CONFIG.QUESTIONS_PER_GAME) {
         return false;
       }
 
-      // Transform questions to match our type
-      const questions: Question[] = questionsFromDb.map(q => ({
-        id: q.id,
-        themeId: q.themeId,
-        questionText: q.questionText,
-        options: q.options as string[],
-        correctAnswer: q.correctAnswer,
-        difficulty: q.difficulty as 'easy' | 'medium' | 'hard',
-      }));
-
       // Update game status to active
-      await updateGame(gameId, { status: GameStatus.ACTIVE });
+      await this.gameRepository.updateGame(gameId, { status: GameStatus.ACTIVE });
 
       // Create game session
       const session: GameSession = {
         game: {
           ...game,
           status: GameStatus.ACTIVE,
-          themeId: game.themeId!,
-          player2Id: game.player2Id || undefined,
-          winnerId: game.winnerId || undefined,
-          completedAt: game.completedAt || undefined,
         },
         questions,
         currentQuestionStartTime: Date.now(),
@@ -160,7 +154,7 @@ export class GameManager {
     session.playersAnswered.add(playerId);
 
     // Save to database
-    await createAnswer({
+    const answer: Answer = {
       id: crypto.randomUUID(),
       gameId,
       playerId,
@@ -169,7 +163,8 @@ export class GameManager {
       isCorrect,
       responseTimeMs: responseTime,
       answeredAt: new Date(),
-    });
+    };
+    await this.answerRepository.createAnswer(answer);
 
     // Update scores
     if (playerId === session.game.player1Id) {
@@ -179,7 +174,7 @@ export class GameManager {
     }
 
     // Update game in database
-    await updateGame(gameId, {
+    await this.gameRepository.updateGame(gameId, {
       player1Score: session.game.player1Score,
       player2Score: session.game.player2Score,
     });
@@ -250,9 +245,9 @@ export class GameManager {
     }
 
     // Update game in database
-    await updateGame(gameId, {
+    await this.gameRepository.updateGame(gameId, {
       status: GameStatus.COMPLETED,
-      winnerId,
+      winnerId: winnerId || undefined,
       player1Score: session.game.player1Score,
       player2Score: session.game.player2Score,
       completedAt: new Date(),
@@ -272,7 +267,8 @@ export class GameManager {
     this.sessions.delete(gameId);
 
     // Schedule database cleanup after a delay to allow clients to process results
-    await deleteGameAndAnswers(gameId);
+    await this.answerRepository.deleteAnswersByGame(gameId);
+    await this.gameRepository.deleteGame(gameId);
   }
 
   getSession(gameId: string): GameSession | undefined {
